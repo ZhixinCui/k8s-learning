@@ -1,0 +1,2 @@
+1.编译安装keepalived时，报错“OpenSSL is not properly installed on your system”
+  apt-get install openssl libssl-dev -y
