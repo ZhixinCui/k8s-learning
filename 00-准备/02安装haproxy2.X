@@ -5,10 +5,10 @@ $ sudo cd haproxy-2.4.4
 $ sudo make clean  
 $ sudo make -j $(nproc) TARGET=linux-glibc USE_OPENSSL=1  USE_PCRE=1 USE_SYSTEMD=1
 $ sudo make install
-$ cp admin/systemd/haproxy.service.in /usr/lib/systemd/system/haproxy.service
-$ cp /usr/local/sbin/haproxy /usr/sbin/
-$ mkdir /etc/haproxy/
-$ vim /etc/haproxy/haproxy.cfg
+$ sudo cp admin/systemd/haproxy.service.in /usr/lib/systemd/system/haproxy.service
+$ sudo cp /usr/local/sbin/haproxy /usr/sbin/
+$ sudo mkdir /etc/haproxy/
+$ sudo vim /etc/haproxy/haproxy.cfg
 global
    strict-limits  # refuse to start if insufficient FDs/memory
    # add some process-wide tuning here if required
