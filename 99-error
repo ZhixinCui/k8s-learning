@@ -1,2 +1,4 @@
 1.编译安装keepalived时，报错“OpenSSL is not properly installed on your system”
   apt-get install openssl libssl-dev -y
+2.scope global secondary dynamic ens33 网卡莫名多出一个IPsecondary地址
+  修改/etc/netplan/00-installer-config.yaml,把dhcpd: true改为dhcpd: false，然后netplan apply
