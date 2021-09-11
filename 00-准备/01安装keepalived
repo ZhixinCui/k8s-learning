@@ -47,7 +47,8 @@ vrrp_instance VI_1 {
 }
 
 #sudo cp /usr/src/keepalived-2.2.4/keepalived/keepalived.service /usr/lib/systemd/system/keepalived.service
-sudo systemctl start keepalived.service
+#keepalived -t //测试keepalived配置
+#sudo systemctl start keepalived.service
 #sudo systemctl enable keepalived.service
 使用命令验证
 #systemctl status keepalived.service
