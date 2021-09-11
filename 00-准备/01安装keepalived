@@ -1,17 +1,17 @@
 //Ubuntu20.04
-#sudo ufw disalbe
-#sudo systemctl disalbe ufw
-#sudo apt-get upgrade -y && apt-get update -y
-#sudo apt-get install net-tools ntp make gcc libssl-dev openssl -y
-#sudo cd /usr/src
-#sudo tar -xf keepalived-2.2.4.tar.gz
-#sudo cd keepalived-2.2.4/
-#sudo ./configure //编译
-#sudo make 
-#sudo make install 
-#sudo mkdir /etc/keepalived 
-#sudo cp /usr/local/etc/keepalived/keepalived.conf  /etc/keepalived/keepalived.conf //根据模板修改配置文件
-#sudo vim /etc/keepalived/keepalived.conf
+$sudo ufw disalbe
+$sudo systemctl disalbe ufw
+$sudo apt-get upgrade -y && apt-get update -y
+$sudo apt-get install net-tools ntp make gcc libssl-dev openssl -y
+$sudo cd /usr/src
+$sudo tar -xf keepalived-2.2.4.tar.gz
+$sudo cd keepalived-2.2.4/
+$sudo ./configure //编译
+$sudo make 
+$sudo make install 
+$sudo mkdir /etc/keepalived 
+$sudo cp /usr/local/etc/keepalived/keepalived.conf  /etc/keepalived/keepalived.conf //根据模板修改配置文件
+$sudo vim /etc/keepalived/keepalived.conf
 
 ! Configuration File for keepalived
 
@@ -46,11 +46,11 @@ vrrp_instance VI_1 {
     }
 }
 
-#sudo cp /usr/src/keepalived-2.2.4/keepalived/keepalived.service /usr/lib/systemd/system/keepalived.service
-#keepalived -t //测试keepalived配置
-#sudo systemctl start keepalived.service
-#sudo systemctl enable keepalived.service
+$sudo cp /usr/src/keepalived-2.2.4/keepalived/keepalived.service /usr/lib/systemd/system/keepalived.service
+$keepalived -t //测试keepalived配置
+$sudo systemctl start keepalived.service
+$sudo systemctl enable keepalived.service
 使用命令验证
-#systemctl status keepalived.service
-#hostname -I //查看虚拟IP在哪个节点上
-#ip a //查看网卡的IP
+$systemctl status keepalived.service
+$hostname -I //查看虚拟IP在哪个节点上
+$ip a //查看网卡的IP
