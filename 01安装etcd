@@ -1,9 +1,9 @@
 1.下载证书生成工具（cfssl_1.6.1、cfssl-certinfo、cfssljson_1.6.1 ）,然后链接或移动到/usr/bin/下。
-  sudo chmod a+x cfssl*
-  sudo ln  /usr/src/cfssl_1.6.1_linux_amd64  /usr/bin/cfssl
+  sudo chmod a+x etcdctl etcd
+  sudo ln  /usr/src/cfssl_1.6.1_linux_amd64  /bin/cfssl
   sudo ln  /usr/src/cfssl-certinfo_1.6.1_linux_amd64  /usr/bin/cfssl-certinfo
   sudo ln  /usr/src/cfssljson_1.6.1_linux_amd64  /usr/bin/cfssljson
-2.在master节点上创建目录
+2.在所有master节点上创建目录
   sudo mkdir /k8s/etcd/{bin,cfg,ssl} -p
   sudo mkdir /k8s/kubernetes/{bin,cfg,ssl} -p
 3.生成ETCD证书
@@ -71,6 +71,7 @@
   5) 生成服务器证书
   neo@master01:/k8s/etcd/ssl$ sudo cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=etcd server-csr.json | sudo cfssljson -bare server
   //生成三个证书相关文件server.csr server-key.pem server.pem
+  //将所有生成的文件copy到master02、master03上同样的目录
 4.生成kubernets证书和私钥
   cd /k8s/etcd/ssl/
   1）etcd的CA配置文件：
@@ -146,6 +147,7 @@
   }
   5）生成证书文件
   neo@master01:/k8s/kubernetes/ssl$ sudo cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes server-csr.json | sudo cfssljson -bare server
+  //将所有生成的文件copy到master02、master03上的同样目录
   6) 编辑kube-proxy证书文件 
   neo@master01:/k8s/kubernetes/ssl$ sudo vim kube-proxy-csr.json
   {
@@ -165,12 +167,14 @@
       }
     ]
   }
+ //将所有生成的文件copy到master02、master03上的同样目录
 5.配置ETCD
  neo@master01:/k8s/kubernetes/ssl$ cd /usr/src/
  neo@master01:/usr/src$ sudo tar -xf etcd-v3.5.0-linux-amd64.tar.gz
  neo@master01:/usr/src$ cd etcd-v3.5.0-linux-amd64/ 
- neo@master01:/usr/src$ sudo chmod a+x etcd*
- neo@master01:/usr/src$ sudo cp etcd* /usr/bin/
+ neo@master01:/usr/src$ sudo chmod a+x etcd etcdctl
+ neo@master01:/usr/src$ sudo cp etcd etcdctl /k8s/etcd/bin
+ //master02、master03也要做该动作
  2) 编写etcd配置文件
  neo@master01:/k8s/etcd/cfg$ vim etcd.conf 
  #[Member]
@@ -196,6 +200,7 @@ ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
 ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
 ETCD_PEER_CLIENT_CERT_AUTH="true"
 2)编写etcd服务文件
+neo@master01:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
 neo@master01:/k8s/etcd/cfg$ vim  /usr/lib/systemd/system/etcd.service    
 [Unit]
 Description=Etcd Server
@@ -224,6 +229,71 @@ LimitNOFILE=65536
 [Install]
 WantedBy=multi-user.target
 3) 配置服务启动
+neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
+neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
+neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
+4）将etcd配置文件和服务文件copy到master02，master03
+neo@master01:/k8s/etcd/cfg$ sudo scp etcd.conf 192.168.63.149:/k8s/etcd/cfg/
+neo@master01:/k8s/etcd/cfg$ sudo scp etcd.conf 192.168.63.149:/k8s/etcd/cfg/
+neo@master01:/k8s/etcd/cfg$ sudo scp /usr/lib/systemd/system/etcd.service 192.168.63.149:/usr/lib/systemd/system/
+neo@master01:/k8s/etcd/cfg$ sudo scp /usr/lib/systemd/system/etcd.service 192.168.63.149:/usr/lib/systemd/system/
+5) 配置master02
+a.编辑maseter02的配置文件
+neo@master02:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
+neo@master02:/k8s/etcd/cfg$ cat etcd.conf 
+ #[Member]
+ETCD_NAME="etcd01"    #etcd节点的名字
+ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
+ETCD_LISTEN_PEER_URLS="https://192.168.63.149:2380"   //改为master02的IP
+ETCD_LISTEN_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+
+#[Clustering]
+ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.149:2380" //改为master02的IP
+ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
+ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_INITIAL_CLUSTER_STATE="new"
+
+#[Security]
+ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_CLIENT_CERT_AUTH="true"
+ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_PEER_CLIENT_CERT_AUTH="true"
+b.配置服务启动
+neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
+neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
+neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
+6) 配置master03
+a.编辑maseter03的配置文件
+neo@master03:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
+neo@master03:/k8s/etcd/cfg$ cat etcd.conf 
+ #[Member]
+ETCD_NAME="etcd01"    #etcd节点的名字
+ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
+ETCD_LISTEN_PEER_URLS="https://192.168.63.149:2380"   //改为master02的IP
+ETCD_LISTEN_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+
+#[Clustering]
+ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.149:2380" //改为master02的IP
+ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
+ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_INITIAL_CLUSTER_STATE="new"
+
+#[Security]
+ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_CLIENT_CERT_AUTH="true"
+ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_PEER_CLIENT_CERT_AUTH="true"
+b.配置服务启动
 neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
 neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
 neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
