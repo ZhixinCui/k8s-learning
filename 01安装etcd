@@ -1,1 +1,230 @@
-1.下载证书生成工具
+1.下载证书生成工具（cfssl_1.6.1、cfssl-certinfo、cfssljson_1.6.1 ）,然后链接或移动到/usr/bin/下。
+  sudo chmod a+x cfssl*
+  sudo ln  /usr/src/cfssl_1.6.1_linux_amd64  /usr/bin/cfssl
+  sudo ln  /usr/src/cfssl-certinfo_1.6.1_linux_amd64  /usr/bin/cfssl-certinfo
+  sudo ln  /usr/src/cfssljson_1.6.1_linux_amd64  /usr/bin/cfssljson
+2.在master节点上创建目录
+  sudo mkdir /k8s/etcd/{bin,cfg,ssl} -p
+  sudo mkdir /k8s/kubernetes/{bin,cfg,ssl} -p
+3.生成ETCD证书
+  cd /k8s/etcd/ssl/
+  1）etcd的CA配置文件：
+  neo@master01:/k8s/etcd/ssl$ sudo vim ca-config.json 
+  {
+    "signing": {
+      "default": {
+        "expiry": "87600h"
+      },
+      "profiles": {
+        "etcd": {
+           "expiry": "87600h",
+           "usages": [
+              "signing", //可以签名其他证书
+              "key encipherment",
+              "server auth", //表示 client 可以用该该证书对 server 提供的证书进行验证
+              "client auth" //表示 server 可以用该该证书对 client 提供的证书进行验证；
+          ]
+        }
+      }
+    }
+  }
+  2）证书请求文件：
+  neo@master01:/k8s/etcd/ssl$   sudo vim ca-csr.json
+  {
+      "CN": "etcd CA",
+      "key": {
+          "algo": "rsa",
+          "size": 2048
+      },
+      "names": [
+          {
+              "C": "CN",
+              "L": "Beijing",
+              "ST": "Beijing"
+          }
+      ]
+  }
+  3）生成server的证书请求文件：
+  neo@master01:/k8s/etcd/ssl$ sudo vim server-csr.json
+  {
+      "CN": "etcd",
+      "hosts": [
+      "192.168.63.148",//master的IP地址
+      "192.168.63.149",
+      "192.168.63.150"
+      ],
+      "key": {
+          "algo": "rsa",
+          "size": 2048
+      },
+      "names": [
+          {
+              "C": "CN",
+              "L": "Beijing",
+              "ST": "Beijing"
+          }
+      ]
+  }
+  4）初始化证书
+  neo@master01:/k8s/etcd/ssl$ sudo cfssl gencert -initca ca-csr.json | sudo cfssljson -bare ca 
+  //会生成以ca开头的文件：ca-key.pem（CA私钥）、 ca.pem（CA证书）、 ca.csr (根证书签发申请文件)
+  5) 生成服务器证书
+  neo@master01:/k8s/etcd/ssl$ sudo cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=etcd server-csr.json | sudo cfssljson -bare server
+  //生成三个证书相关文件server.csr server-key.pem server.pem
+4.生成kubernets证书和私钥
+  cd /k8s/etcd/ssl/
+  1）etcd的CA配置文件：
+  neo@master01:/k8s/kubernetes/ssl$ vim ca-config.json
+    {
+    "signing": {
+      "default": {
+        "expiry": "87600h"
+      },
+      "profiles": {
+        "kubernetes": {
+           "expiry": "87600h",
+           "usages": [
+              "signing",
+              "key encipherment",
+              "server auth",
+              "client auth"
+          ]
+        }
+      }
+    }
+  2）etcd的CA配置文件
+  neo@master01:/k8s/kubernetes/ssl$ vim ca-config.json
+  {
+      "CN": "kubernetes",
+      "key": {
+          "algo": "rsa",
+          "size": 2048
+      },
+      "names": [
+          {
+              "C": "CN",
+              "L": "Beijing",
+              "ST": "Beijing",
+              "O": "matrix.com",
+              "OU": "System"
+          }
+      ]
+  }
+  3) 生成文件
+ neo@master01:/k8s/kubernetes/ssl$ sudo cfssl gencert -initca ca-csr.json | sudo cfssljson -bare ca -
+  4） 生成api server文件
+  {
+      "CN": "kubernetes",
+      "hosts": [
+        "10.254.0.1",
+        "127.0.0.1",
+        "192.168.63.148",
+        "192.168.63.149",
+        "192.168.63.150",
+        "192.168.63.151",
+        "kubernetes",
+        "kubernetes.default",
+        "kubernetes.default.svc",
+        "kubernetes.default.svc.cluster",
+        "kubernetes.default.svc.matrix.com",
+        "kubernetes.default.svc.matrix",
+        "kubernetes.default.svc.cluster.local"
+      ],
+      "key": {
+          "algo": "rsa",
+          "size": 2048
+      },
+      "names": [
+          {
+              "C": "CN",
+              "L": "Beijing",
+              "ST": "Beijing",
+              "O": "k8s",
+              "OU": "System"
+          }
+      ]
+  }
+  5）生成证书文件
+  neo@master01:/k8s/kubernetes/ssl$ sudo cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=kubernetes server-csr.json | sudo cfssljson -bare server
+  6) 编辑kube-proxy证书文件 
+  neo@master01:/k8s/kubernetes/ssl$ sudo vim kube-proxy-csr.json
+  {
+    "CN": "system:kube-proxy",
+    "hosts": [],
+    "key": {
+      "algo": "rsa",
+      "size": 2048
+    },
+    "names": [
+      {
+        "C": "CN",
+        "L": "Beijing",
+        "ST": "Beijing",
+        "O": "matrix.com",
+        "OU": "System"
+      }
+    ]
+  }
+5.配置ETCD
+ neo@master01:/k8s/kubernetes/ssl$ cd /usr/src/
+ neo@master01:/usr/src$ sudo tar -xf etcd-v3.5.0-linux-amd64.tar.gz
+ neo@master01:/usr/src$ cd etcd-v3.5.0-linux-amd64/ 
+ neo@master01:/usr/src$ sudo chmod a+x etcd*
+ neo@master01:/usr/src$ sudo cp etcd* /usr/bin/
+ 2) 编写etcd配置文件
+ neo@master01:/k8s/etcd/cfg$ vim etcd.conf 
+ #[Member]
+ETCD_NAME="etcd01"    #etcd节点的名字
+ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
+ETCD_LISTEN_PEER_URLS="https://192.168.63.148:2380"  
+ETCD_LISTEN_CLIENT_URLS="https://127.0.0.1:2379"
+
+#[Clustering]
+ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.148:2380"
+ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.148:2379"
+ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
+ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
+ETCD_INITIAL_CLUSTER_STATE="new"
+
+#[Security]
+ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_CLIENT_CERT_AUTH="true"
+ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
+ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
+ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
+ETCD_PEER_CLIENT_CERT_AUTH="true"
+2)编写etcd服务文件
+neo@master01:/k8s/etcd/cfg$ vim  /usr/lib/systemd/system/etcd.service    
+[Unit]
+Description=Etcd Server
+After=network.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+WorkingDirectory=/data1/etcd/
+
+ExecStart=/k8s/etcd/bin/etcd  \
+  --data-dir=/data1/etcd \
+  --initial-cluster-token=etcd-cluster \
+  --initial-cluster-state=new \
+  --cert-file=/k8s/etcd/ssl/server.pem \
+  --key-file=/k8s/etcd/ssl/server-key.pem \
+  --trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --client-cert-auth=true \
+  --peer-cert-file=/k8s/etcd/ssl/server.pem \
+  --peer-key-file=/k8s/etcd/ssl/server-key.pem \
+  --peer-trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --peer-client-cert-auth=true
+Restart=on-failure
+LimitNOFILE=65536
+[Install]
+WantedBy=multi-user.target
+3) 配置服务启动
+neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
+neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
+neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
+ 
