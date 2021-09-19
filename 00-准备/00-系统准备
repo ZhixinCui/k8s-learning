@@ -1,0 +1,23 @@
+1.关闭swap
+ neo@master0:/k8s/kubernetes/cfg$ sudo swapoff -a
+ neo@master01:/k8s/kubernetes/cfg$ sudo vim /etc/fstab  //注释swap配置
+  #/swap.img      none    swap    sw      0       0
+2.时间
+ 安装ntp
+ neo@master01:/k8s/kubernetes/cfg$ sudo apt-get install ntp
+ neo@master01:/k8s/kubernetes/cfg$ sudo cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+ neo@master01:/k8s/kubernetes/cfg$ sudo systemctl enable ntp
+ neo@master01:/k8s/kubernetes/cfg$ sudo vim /etc/ntp.conf 
+ pool ntp.aliyun.com
+3.关闭防火墙
+ neo@master01:/k8s/kubernetes/cfg$ sudo ufw disable
+4. hosts文件，增加以下内容
+ neo@master01:/k8s/kubernetes/cfg$ sudo vim /etc/hosts
+  192.168.63.148 master01.matrix.com etcd01
+  192.168.63.149 master02.matrix.com etcd02
+  192.168.63.150 master03.matrix.com etcd03
+5.开启转发
+ neo@master01:/k8s/kubernetes/cfg$ sudo vim /etc/sysctl.d/k8s.conf
+  net.ipv4.ip_forward = 1
+  
+ neo@master01:/k8s/kubernetes/cfg$ sudo systcl -p
