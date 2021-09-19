@@ -175,31 +175,8 @@
  neo@master01:/usr/src$ sudo chmod a+x etcd etcdctl
  neo@master01:/usr/src$ sudo cp etcd etcdctl /k8s/etcd/bin
  //master02、master03也要做该动作
- 2) 编写etcd配置文件
- neo@master01:/k8s/etcd/cfg$ vim etcd.conf 
- #[Member]
-ETCD_NAME="etcd01"    #etcd节点的名字
-ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
-ETCD_LISTEN_PEER_URLS="https://192.168.63.148:2380"  
-ETCD_LISTEN_CLIENT_URLS="https://127.0.0.1:2379"
-
-#[Clustering]
-ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.148:2380"
-ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.148:2379"
-ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
-ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-ETCD_INITIAL_CLUSTER_STATE="new"
-
-#[Security]
-ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_CLIENT_CERT_AUTH="true"
-ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_PEER_CLIENT_CERT_AUTH="true"
 2)编写etcd服务文件
+//在3.5版本中发现只能在service和cfg文件中二选一，不能两个文件都使用
 neo@master01:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
 neo@master01:/k8s/etcd/cfg$ vim  /usr/lib/systemd/system/etcd.service    
 [Unit]
@@ -211,9 +188,9 @@ Wants=network-online.target
 [Service]
 Type=notify
 WorkingDirectory=/data1/etcd/
-
+#EnvironmentFile=-/k8s/etcd/cfg/etcd.conf
 ExecStart=/k8s/etcd/bin/etcd  \
-  --data-dir=/data1/etcd \
+  --name=etcd01 \
   --initial-cluster-token=etcd-cluster \
   --initial-cluster-state=new \
   --cert-file=/k8s/etcd/ssl/server.pem \
@@ -223,7 +200,13 @@ ExecStart=/k8s/etcd/bin/etcd  \
   --peer-cert-file=/k8s/etcd/ssl/server.pem \
   --peer-key-file=/k8s/etcd/ssl/server-key.pem \
   --peer-trusted-ca-file=/k8s/etcd/ssl/ca.pem \
-  --peer-client-cert-auth=true
+  --peer-client-cert-auth=true \
+  --data-dir=/data1/etcd/default.etcd \
+  --listen-peer-urls=https://192.168.63.148:2380 \
+  --listen-client-urls=https://192.168.63.148:2379,http://127.0.0.1:2379 \
+  --advertise-client-urls=https://192.168.63.148:2379 \
+  --initial-advertise-peer-urls=https://192.168.63.148:2380 \
+  --initial-cluster=etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380 
 Restart=on-failure
 LimitNOFILE=65536
 [Install]
@@ -232,37 +215,45 @@ WantedBy=multi-user.target
 neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
 neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
 neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
-4）将etcd配置文件和服务文件copy到master02，master03
-neo@master01:/k8s/etcd/cfg$ sudo scp etcd.conf 192.168.63.149:/k8s/etcd/cfg/
-neo@master01:/k8s/etcd/cfg$ sudo scp etcd.conf 192.168.63.149:/k8s/etcd/cfg/
+4）将etcd服务文件copy到master02，master03
 neo@master01:/k8s/etcd/cfg$ sudo scp /usr/lib/systemd/system/etcd.service 192.168.63.149:/usr/lib/systemd/system/
 neo@master01:/k8s/etcd/cfg$ sudo scp /usr/lib/systemd/system/etcd.service 192.168.63.149:/usr/lib/systemd/system/
 5) 配置master02
 a.编辑maseter02的配置文件
 neo@master02:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
-neo@master02:/k8s/etcd/cfg$ cat etcd.conf 
- #[Member]
-ETCD_NAME="etcd01"    #etcd节点的名字
-ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
-ETCD_LISTEN_PEER_URLS="https://192.168.63.149:2380"   //改为master02的IP
-ETCD_LISTEN_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+neo@master02:/k8s/etcd/cfg$ sudo vim /usr/lib/systemd/system/etcd.service 
+[Unit]
+Description=Etcd Server
+After=network.target
+After=network-online.target
+Wants=network-online.target
 
-#[Clustering]
-ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.149:2380" //改为master02的IP
-ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
-ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
-ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-ETCD_INITIAL_CLUSTER_STATE="new"
-
-#[Security]
-ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_CLIENT_CERT_AUTH="true"
-ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_PEER_CLIENT_CERT_AUTH="true"
+[Service]
+Type=notify
+WorkingDirectory=/data1/etcd/
+#EnvironmentFile=-/k8s/etcd/cfg/etcd.conf
+ExecStart=/k8s/etcd/bin/etcd  \
+  --name=etcd02 \
+  --initial-cluster-token=etcd-cluster \
+  --initial-cluster-state=new \
+  --cert-file=/k8s/etcd/ssl/server.pem \
+  --key-file=/k8s/etcd/ssl/server-key.pem \
+  --trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --client-cert-auth=true \
+  --peer-cert-file=/k8s/etcd/ssl/server.pem \
+  --peer-key-file=/k8s/etcd/ssl/server-key.pem \
+  --peer-trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --peer-client-cert-auth=true \
+  --data-dir=/data1/etcd/default.etcd \
+  --listen-peer-urls=https://192.168.63.149:2380 \
+  --listen-client-urls=https://192.168.63.149:2379,http://127.0.0.1:2379 \
+  --advertise-client-urls=https://192.168.63.149:2379 \
+  --initial-advertise-peer-urls=https://192.168.63.149:2380 \
+  --initial-cluster=etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380 
+Restart=on-failure
+LimitNOFILE=65536
+[Install]
+WantedBy=multi-user.target
 b.配置服务启动
 neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
 neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
@@ -270,31 +261,52 @@ neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd
 6) 配置master03
 a.编辑maseter03的配置文件
 neo@master03:/k8s/etcd/cfg$ sudo mkdir /data1/etcd -p
-neo@master03:/k8s/etcd/cfg$ cat etcd.conf 
- #[Member]
-ETCD_NAME="etcd01"    #etcd节点的名字
-ETCD_DATA_DIR="/data1/etcd"   #存放etcd数据的目录
-ETCD_LISTEN_PEER_URLS="https://192.168.63.149:2380"   //改为master02的IP
-ETCD_LISTEN_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
+neo@master03:/k8s/etcd/cfg$ sudo vim /usr/lib/systemd/system/etcd.service 
+[Unit]
+Description=Etcd Server
+After=network.target
+After=network-online.target
+Wants=network-online.target
 
-#[Clustering]
-ETCD_INITIAL_ADVERTISE_PEER_URLS="https://192.168.63.149:2380" //改为master02的IP
-ETCD_ADVERTISE_CLIENT_URLS="https://192.168.63.149:2379" //改为master02的IP
-ETCD_INITIAL_CLUSTER="etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380"
-ETCD_INITIAL_CLUSTER_TOKEN="etcd-cluster"
-ETCD_INITIAL_CLUSTER_STATE="new"
-
-#[Security]
-ETCD_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_CLIENT_CERT_AUTH="true"
-ETCD_PEER_CERT_FILE="/k8s/etcd/ssl/server.pem"
-ETCD_PEER_KEY_FILE="/k8s/etcd/ssl/server-key.pem"
-ETCD_PEER_TRUSTED_CA_FILE="/k8s/etcd/ssl/ca.pem"
-ETCD_PEER_CLIENT_CERT_AUTH="true"
+[Service]
+Type=notify
+WorkingDirectory=/data1/etcd/
+#EnvironmentFile=-/k8s/etcd/cfg/etcd.conf
+ExecStart=/k8s/etcd/bin/etcd  \
+  --name=etcd03 \
+  --initial-cluster-token=etcd-cluster \
+  --initial-cluster-state=new \
+  --cert-file=/k8s/etcd/ssl/server.pem \
+  --key-file=/k8s/etcd/ssl/server-key.pem \
+  --trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --client-cert-auth=true \
+  --peer-cert-file=/k8s/etcd/ssl/server.pem \
+  --peer-key-file=/k8s/etcd/ssl/server-key.pem \
+  --peer-trusted-ca-file=/k8s/etcd/ssl/ca.pem \
+  --peer-client-cert-auth=true \
+  --data-dir=/data1/etcd/default.etcd \
+  --listen-peer-urls=https://192.168.63.150:2380 \
+  --listen-client-urls=https://192.168.63.150:2379,http://127.0.0.1:2379 \
+  --advertise-client-urls=https://192.168.63.150:2379 \
+  --initial-advertise-peer-urls=https://192.168.63.150:2380 \
+  --initial-cluster=etcd01=https://192.168.63.148:2380,etcd02=https://192.168.63.149:2380,etcd03=https://192.168.63.150:2380 
+Restart=on-failure
+LimitNOFILE=65536
+[Install]
+WantedBy=multi-user.target
 b.配置服务启动
 neo@master01:/k8s/etcd/cfg$ sudo systemctl daemon-reload 
 neo@master01:/k8s/etcd/cfg$ sudo systemctl enable etcd
 neo@master01:/k8s/etcd/cfg$ sudo systemctl start etcd 
+
+验证etcd
+neo@master01:/k8s/etcd/cfg$ sudo ETCDCTL_API=3 etcdctl  --cacert=/k8s/etcd/ssl/ca.pem --cert=/k8s/etcd/ssl/server.pem --key=/k8s/etcd/ssl/server-key.pem --endpoints="https://192.168.63.148:2379,https://192.168.63.149:2379,https://192.168.63.150:2379"   endpoint health
+https://192.168.63.148:2379 is healthy: successfully committed proposal: took = 42.549232ms
+https://192.168.63.150:2379 is healthy: successfully committed proposal: took = 57.116899ms
+https://192.168.63.149:2379 is healthy: successfully committed proposal: took = 78.713865ms
+neo@master01:/k8s/etcd/cfg$ sudo etcdctl member list
+1829aeef84335dfd, started, etcd02, https://192.168.63.149:2380, https://192.168.63.149:2379, false
+251da012ecc749a1, started, etcd03, https://192.168.63.150:2380, https://192.168.63.150:2379, false
+fd6bf73a5ad27d82, started, etcd01, https://192.168.63.148:2380, https://192.168.63.148:2379, false
+
  
