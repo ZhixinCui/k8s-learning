@@ -1,0 +1,10 @@
+各组件使用的端口：
+  APIServer: 8080（http非安全端口）,6443(https安全端口)
+  Controller Manager: 10252
+  Scheduler: 10251
+  kubelet: 10250,10255(只读)
+  etcd: 2379(供客户端访问),2380（供etcd集群内部节点之间访问）
+  DNS: 53
+  CNI: 179
+  
+  
